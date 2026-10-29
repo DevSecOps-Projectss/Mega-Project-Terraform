@@ -11,7 +11,7 @@ resource "aws_vpc" "devopsshack_vpc" {
 }
 
 resource "aws_subnet" "devopsshack_subnet" {
-  count = 2
+  count                   = 2
   vpc_id                  = aws_vpc.devopsshack_vpc.id
   cidr_block              = cidrsubnet(aws_vpc.devopsshack_vpc.cidr_block, 8, count.index)
   availability_zone       = element(["ap-south-1a", "ap-south-1b"], count.index)
@@ -94,17 +94,11 @@ resource "aws_eks_cluster" "devopsshack" {
     subnet_ids         = aws_subnet.devopsshack_subnet[*].id
     security_group_ids = [aws_security_group.devopsshack_cluster_sg.id]
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.devopsshack_cluster_role_policy
+  ]
 }
-
-
-resource "aws_eks_addon" "ebs_csi_driver" {
-  cluster_name    = aws_eks_cluster.devopsshack.name
-  addon_name      = "aws-ebs-csi-driver"
-  
-  resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "OVERWRITE"
-}
-
 
 resource "aws_eks_node_group" "devopsshack" {
   cluster_name    = aws_eks_cluster.devopsshack.name
@@ -124,6 +118,25 @@ resource "aws_eks_node_group" "devopsshack" {
     ec2_ssh_key = var.ssh_key_name
     source_security_group_ids = [aws_security_group.devopsshack_node_sg.id]
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.devopsshack_node_group_role_policy,
+    aws_iam_role_policy_attachment.devopsshack_node_group_cni_policy,
+    aws_iam_role_policy_attachment.devopsshack_node_group_registry_policy,
+    aws_iam_role_policy_attachment.devopsshack_node_group_ebs_policy,
+  ]
+}
+
+resource "aws_eks_addon" "ebs_csi_driver" {
+  cluster_name = aws_eks_cluster.devopsshack.name
+  addon_name   = "aws-ebs-csi-driver"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_node_group.devopsshack
+  ]
 }
 
 resource "aws_iam_role" "devopsshack_cluster_role" {
